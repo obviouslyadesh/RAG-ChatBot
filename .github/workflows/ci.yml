@@ -1,0 +1,59 @@
+name: RAG CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest tests/ -v
+        # Remove "|| true" — let failures fail the pipeline
+
+      - name: Build FastAPI image
+        run: |
+          docker build \
+            -f docker/fastapi/Dockerfile \
+            -t rag-api:${{ github.sha }} \
+            .
+
+      - name: Build Streamlit image
+        run: |
+          docker build \
+            -f docker/streamlit/Dockerfile \
+            -t rag-ui:${{ github.sha }} \
+            .
+
+      - name: Verify containers start
+        run: |
+          docker run -d --name test-api \
+            -e OLLAMA_HOST=http://localhost:11434 \
+            -e VECTOR_DB_PATH=app/data/vectorstore \
+            -p 8000:8000 \
+            rag-api:${{ github.sha }}
+          sleep 5
+          curl --fail http://localhost:8000/docs || exit 1
+          docker stop test-api

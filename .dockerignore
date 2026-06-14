@@ -1,0 +1,11 @@
+.venv
+.git
+__pycache__
+*.pyc
+
+app/data/vectorstore
+app/data/documents
+
+.streamlit
+
+.env

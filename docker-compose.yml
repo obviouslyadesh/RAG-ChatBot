@@ -1,0 +1,33 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/fastapi/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Maps ./app/data on your laptop → /app/app/data inside the container
+      # Uploaded PDFs persist across container restarts
+      - ./app/data:/app/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: docker/streamlit/Dockerfile
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      # Streamlit calls FastAPI by service name, not localhost
+      - API_BASE_URL=http://api:8000
